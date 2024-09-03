@@ -107,7 +107,7 @@ const Chat = ({ chatType }: Props) => {
       assistantMessage.content = assistantContent
     }
 
-    if (resultMessage.role === TOOL) toolMessage = resultMessage
+    if (resultMessage.role === TOOL) toolMessage = {...resultMessage, content: JSON.stringify(resultMessage.content)};
 
     if (!conversationId) {
       isEmpty(toolMessage) ?

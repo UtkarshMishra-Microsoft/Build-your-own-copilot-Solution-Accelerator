@@ -35,7 +35,7 @@ if DEBUG_LOGGING:
     logging.basicConfig(level=logging.DEBUG)
 
 # On Your Data Settings
-DATASOURCE_TYPE = os.environ.get("DATASOURCE_TYPE", "AzureCognitiveSearch")
+DATASOURCE_TYPE = os.environ.get("DATASOURCE_TYPE", "azure_search")
 SEARCH_TOP_K = os.environ.get("SEARCH_TOP_K", 5)
 SEARCH_STRICTNESS = os.environ.get("SEARCH_STRICTNESS", 3)
 SEARCH_ENABLE_IN_DOMAIN = os.environ.get("SEARCH_ENABLE_IN_DOMAIN", "true")
@@ -68,7 +68,7 @@ AZURE_OPENAI_TOP_P = os.environ.get("AZURE_OPENAI_TOP_P", 1.0)
 AZURE_OPENAI_MAX_TOKENS = os.environ.get("AZURE_OPENAI_MAX_TOKENS", 1000)
 AZURE_OPENAI_STOP_SEQUENCE = os.environ.get("AZURE_OPENAI_STOP_SEQUENCE")
 AZURE_OPENAI_SYSTEM_MESSAGE = os.environ.get("AZURE_OPENAI_SYSTEM_MESSAGE", "You are an AI assistant that helps people find information.")
-AZURE_OPENAI_PREVIEW_API_VERSION = os.environ.get("AZURE_OPENAI_PREVIEW_API_VERSION", "2023-08-01-preview")
+AZURE_OPENAI_PREVIEW_API_VERSION = os.environ.get("AZURE_OPENAI_PREVIEW_API_VERSION", "2024-05-01-preview")
 AZURE_OPENAI_STREAM = os.environ.get("AZURE_OPENAI_STREAM", "true")
 AZURE_OPENAI_MODEL_NAME = os.environ.get("AZURE_OPENAI_MODEL_NAME", "gpt-35-turbo-16k") # Name of the model, e.g. 'gpt-35-turbo-16k' or 'gpt-4'
 AZURE_OPENAI_EMBEDDING_ENDPOINT = os.environ.get("AZURE_OPENAI_EMBEDDING_ENDPOINT")
@@ -150,17 +150,22 @@ def generateFilterString(userToken):
 def prepare_body_headers_with_data(request):
     request_messages = request.json["messages"]
 
+    messages = [{"role": "system", "content": AZURE_OPENAI_SYSTEM_MESSAGE}]
+    for message in request_messages:
+        if message and message.get("role") != "tool":
+            messages.append({"role": message["role"], "content": message["content"]})
+
     body = {
-        "messages": request_messages,
+        "messages": messages,
         "temperature": float(AZURE_OPENAI_TEMPERATURE),
         "max_tokens": int(AZURE_OPENAI_MAX_TOKENS),
         "top_p": float(AZURE_OPENAI_TOP_P),
         "stop": AZURE_OPENAI_STOP_SEQUENCE.split("|") if AZURE_OPENAI_STOP_SEQUENCE else None,
         "stream": SHOULD_STREAM,
-        "dataSources": []
+        "data_sources": []
     }
 
-    if DATASOURCE_TYPE == "AzureCognitiveSearch":
+    if DATASOURCE_TYPE == "azure_search":
         # Set query type
         query_type = "simple"
         if AZURE_SEARCH_QUERY_TYPE:
@@ -180,47 +185,65 @@ def prepare_body_headers_with_data(request):
             if DEBUG_LOGGING:
                 logging.debug(f"FILTER: {filter}")
 
-        body["dataSources"].append(
+        body["data_sources"].append(
             {
-                "type": "AzureCognitiveSearch",
+                "type": "azure_search",
                 "parameters": {
                     "endpoint": f"https://{AZURE_SEARCH_SERVICE}.search.windows.net",
-                    "key": AZURE_SEARCH_KEY,
-                    "indexName": AZURE_SEARCH_INDEX_GRANTS if request.json.get("index_name").lower() == "grants" else AZURE_SEARCH_INDEX_ARTICLES,
-                    "fieldsMapping": {
-                        "contentFields": parse_multi_columns(AZURE_SEARCH_CONTENT_COLUMNS) if AZURE_SEARCH_CONTENT_COLUMNS else [],
-                        "titleField": AZURE_SEARCH_TITLE_COLUMN if AZURE_SEARCH_TITLE_COLUMN else None,
-                        "urlField": AZURE_SEARCH_URL_COLUMN if AZURE_SEARCH_URL_COLUMN else None,
-                        "filepathField": AZURE_SEARCH_FILENAME_COLUMN if AZURE_SEARCH_FILENAME_COLUMN else None,
-                        "vectorFields": parse_multi_columns(AZURE_SEARCH_VECTOR_COLUMNS) if AZURE_SEARCH_VECTOR_COLUMNS else []
+                    "authentication":{
+                        "key": AZURE_SEARCH_KEY,
+                        "type": "api_key"
                     },
-                    "inScope": True if AZURE_SEARCH_ENABLE_IN_DOMAIN.lower() == "true" else False,
-                    "topNDocuments": AZURE_SEARCH_TOP_K,
-                    "queryType": query_type,
-                    "semanticConfiguration": AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG if AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG else "",
-                    "roleInformation": AZURE_OPENAI_SYSTEM_MESSAGE,
+                    "index_name": AZURE_SEARCH_INDEX_GRANTS if request.json.get("index_name").lower() == "grants" else AZURE_SEARCH_INDEX_ARTICLES,
+                    "fields_mapping": {
+                        "content_fields": parse_multi_columns(AZURE_SEARCH_CONTENT_COLUMNS) if AZURE_SEARCH_CONTENT_COLUMNS else [],
+                        "title_field": AZURE_SEARCH_TITLE_COLUMN if AZURE_SEARCH_TITLE_COLUMN else None,
+                        "url_field": AZURE_SEARCH_URL_COLUMN if AZURE_SEARCH_URL_COLUMN else None,
+                        "filepath_field": AZURE_SEARCH_FILENAME_COLUMN if AZURE_SEARCH_FILENAME_COLUMN else None,
+                        "vector_fields": parse_multi_columns(AZURE_SEARCH_VECTOR_COLUMNS) if AZURE_SEARCH_VECTOR_COLUMNS else []
+                    },
+                    "in_scope": True if AZURE_SEARCH_ENABLE_IN_DOMAIN.lower() == "true" else False,
+                    "top_n_documents": AZURE_SEARCH_TOP_K,
+                    "query_type": query_type,
+                    "semantic_configuration": AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG if AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG else "",
+                    "role_information": AZURE_OPENAI_SYSTEM_MESSAGE,
                     "filter": filter,
-                    "strictness": int(AZURE_SEARCH_STRICTNESS)
+                    "strictness": int(AZURE_SEARCH_STRICTNESS),
+                    "embedding_dependency": {}
                 }
             })
     else:
         raise Exception(f"DATASOURCE_TYPE is not configured or unknown: {DATASOURCE_TYPE}")
 
     if "vector" in query_type.lower():
+        embeddingDependency = {}
         if AZURE_OPENAI_EMBEDDING_NAME:
-            body["dataSources"][0]["parameters"]["embeddingDeploymentName"] = AZURE_OPENAI_EMBEDDING_NAME
+            embeddingDependency = {
+                "type": "deployment_name",
+                "deployment_name": AZURE_OPENAI_EMBEDDING_NAME,
+            }
+        elif AZURE_OPENAI_EMBEDDING_ENDPOINT and AZURE_OPENAI_EMBEDDING_KEY:
+            embeddingDependency = {
+                "type": "endpoint",
+                "endpoint": AZURE_OPENAI_EMBEDDING_ENDPOINT,
+                "authentication": {
+                    "type": "api_key",
+                    "key": AZURE_OPENAI_EMBEDDING_KEY,
+                },
+            }
         else:
-            body["dataSources"][0]["parameters"]["embeddingEndpoint"] = AZURE_OPENAI_EMBEDDING_ENDPOINT
-            body["dataSources"][0]["parameters"]["embeddingKey"] = AZURE_OPENAI_EMBEDDING_KEY
-
+            raise Exception(
+                f"Vector query type ({query_type}) is selected for data source type {DATASOURCE_TYPE} but no embedding dependency is configured"
+            )
+        body["data_sources"][0]["parameters"]["embedding_dependency"] = embeddingDependency
+            
     if DEBUG_LOGGING:
         body_clean = copy.deepcopy(body)
-        if body_clean["dataSources"][0]["parameters"].get("key"):
-            body_clean["dataSources"][0]["parameters"]["key"] = "*****"
-        if body_clean["dataSources"][0]["parameters"].get("connectionString"):
-            body_clean["dataSources"][0]["parameters"]["connectionString"] = "*****"
-        if body_clean["dataSources"][0]["parameters"].get("embeddingKey"):
-            body_clean["dataSources"][0]["parameters"]["embeddingKey"] = "*****"
+        if body_clean["data_sources"][0]["parameters"]["authentication"].get("key"):
+            body_clean["data_sources"][0]["parameters"]["authentication"]["key"] = "*****"
+        embeddingDependency = body_clean["data_sources"][0]["parameters"].get("embedding_dependency", {})
+        if "authentication" in embeddingDependency and "key" in embeddingDependency.get("authentication",{}) :
+            body_clean["data_sources"][0]["parameters"]["embedding_dependency"]["authentication"]["key"] = "*****"
             
         logging.debug(f"REQUEST BODY: {json.dumps(body_clean, indent=4)}")
 
@@ -277,15 +300,11 @@ def stream_with_data(body, headers, endpoint, history_metadata={}):
                     }
 
                     if line:
-                        if AZURE_OPENAI_PREVIEW_API_VERSION == '2023-06-01-preview':
-                            lineJson = json.loads(line.lstrip(b'data:').decode('utf-8'))
-                        else:
-                            try:
-                                rawResponse = json.loads(line.lstrip(b'data:').decode('utf-8'))
-                                lineJson = formatApiResponseStreaming(rawResponse)
-                            except json.decoder.JSONDecodeError:
-                                continue
-
+                        try:
+                            rawResponse = json.loads(line.lstrip(b'data:').decode('utf-8'))
+                            lineJson = formatApiResponseStreaming(rawResponse)
+                        except json.decoder.JSONDecodeError:
+                            continue                  
                         if 'error' in lineJson:
                             error_code_value = lineJson.get('error', {}).get('code', '')
                             error_message = format_as_ndjson(lineJson)
@@ -347,7 +366,7 @@ def formatApiResponseNoStreaming(rawResponse):
     }
     toolMessage = {
         "role": "tool",
-        "content": rawResponse["choices"][0]["message"]["context"]["messages"][0]["content"]
+        "content": rawResponse["choices"][0]["message"]["context"]
     }
     assistantMessage = {
         "role": "assistant",
@@ -375,7 +394,7 @@ def formatApiResponseStreaming(rawResponse):
         messageObj = {
             "delta": {
                 "role": "tool",
-                "content": rawResponse["choices"][0]["delta"]["context"]["messages"][0]["content"]
+                "content": rawResponse["choices"][0]["delta"]["context"]
             }
         }
         response["choices"][0]["messages"].append(messageObj)
@@ -407,7 +426,7 @@ def formatApiResponseStreaming(rawResponse):
 def conversation_with_data(request_body):
     body, headers = prepare_body_headers_with_data(request)
     base_url = AZURE_OPENAI_ENDPOINT if AZURE_OPENAI_ENDPOINT else f"https://{AZURE_OPENAI_RESOURCE}.openai.azure.com/"
-    endpoint = f"{base_url}openai/deployments/{AZURE_OPENAI_MODEL}/extensions/chat/completions?api-version={AZURE_OPENAI_PREVIEW_API_VERSION}"
+    endpoint = f"{base_url}openai/deployments/{AZURE_OPENAI_MODEL}/chat/completions?api-version={AZURE_OPENAI_PREVIEW_API_VERSION}"
     history_metadata = request_body.get("history_metadata", {})
 
     if USE_AZURE_AI_STUDIO.lower() == "true":
@@ -417,15 +436,10 @@ def conversation_with_data(request_body):
         r = requests.post(endpoint, headers=headers, json=body)
         status_code = r.status_code
         r = r.json()
-        if AZURE_OPENAI_PREVIEW_API_VERSION == "2023-06-01-preview":
-            r['history_metadata'] = history_metadata
-            return Response(format_as_ndjson(r), status=status_code)
-        else:
-            result = formatApiResponseNoStreaming(r)
-            result['history_metadata'] = history_metadata
-            return Response(format_as_ndjson(result), status=status_code)
+        result = formatApiResponseNoStreaming(r)
+        result['history_metadata'] = history_metadata
+        return Response(format_as_ndjson(result), status=status_code)
     else:
-
         return Response(stream_with_data(body, headers, endpoint, history_metadata), mimetype='text/event-stream')
 
 @app.route("/conversation", methods=["GET", "POST"])
@@ -465,7 +479,7 @@ def draft_document_generate():
     section = request_body["sectionTitle"]
     section_context = request_body["sectionContext"]
     if(section_context != ""):
-        query = f'{section_context} ' 
+        query = f'{section_context}'
     else:
         query = f'Create {section} section of research grant application for - {topic}.' 
 

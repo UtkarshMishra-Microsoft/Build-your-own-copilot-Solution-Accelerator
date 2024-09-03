@@ -26,16 +26,16 @@ resource accounts_byc_openai_name_resource 'Microsoft.CognitiveServices/accounts
 
 resource accounts_byc_openai_name_gpt_35_turbo 'Microsoft.CognitiveServices/accounts/deployments@2023-05-01' = {
   parent: accounts_byc_openai_name_resource
-  name: 'gpt-35-turbo-16k'
+  name: 'gpt-4o'
   sku: {
     name: 'Standard'
-    capacity: 30
+    capacity: 60
   }
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-35-turbo-16k'
-      version: '0613'
+      name: 'gpt-4o'
+      version: '2024-05-13'
     }
     versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
     raiPolicyName: 'Microsoft.Default'
