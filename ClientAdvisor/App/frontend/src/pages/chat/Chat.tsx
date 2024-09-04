@@ -31,7 +31,7 @@ import {
 } from '../../api'
 import { Answer } from '../../components/Answer'
 import { QuestionInput } from '../../components/QuestionInput'
-import { ChatHistoryPanel } from '../../components/ChatHistory/ChatHistoryPanel'
+
 import { AppStateContext } from '../../state/AppProvider'
 import { useBoolean } from '@fluentui/react-hooks'
 import { PromptsSection, PromptType } from '../../components/PromptsSection/PromptsSection'
@@ -167,7 +167,8 @@ const Chat = (props: any) => {
         id: conversationId ?? uuid(),
         title: question,
         messages: [userMessage],
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        updatedAt : new Date().toISOString(),
       }
     } else {
       conversation = appStateContext?.state?.currentChat
@@ -415,7 +416,8 @@ const Chat = (props: any) => {
             id: result.history_metadata.conversation_id,
             title: result.history_metadata.title,
             messages: [userMessage],
-            date: result.history_metadata.date
+            date: result.history_metadata.date,
+            updatedAt : result.history_metadata.date,
           }
           isEmpty(toolMessage)
             ? resultConversation.messages.push(assistantMessage)
@@ -479,7 +481,8 @@ const Chat = (props: any) => {
             id: result.history_metadata.conversation_id,
             title: result.history_metadata.title,
             messages: [userMessage],
-            date: result.history_metadata.date
+            date: result.history_metadata.date,
+            updatedAt: result.history_metadata.date,
           }
           resultConversation.messages.push(errorChatMsg)
         }
@@ -668,7 +671,7 @@ const Chat = (props: any) => {
 
   useLayoutEffect(() => {
     const element = document.getElementById("chatMessagesContainer")!;
-    if(element){
+    if (element) {
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
   }, [showLoadingMessage, processMessages])
@@ -714,7 +717,7 @@ const Chat = (props: any) => {
         : makeApiRequestWithoutCosmosDB(question, conversationId)
     }
   }
-  
+
   return (
     <div className={styles.container} role="main">
       {showAuthMessage ? (
@@ -938,8 +941,6 @@ const Chat = (props: any) => {
               </div>
             </Stack.Item>
           )}
-          {appStateContext?.state.isChatHistoryOpen &&
-            appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && <ChatHistoryPanel isLoading={isLoading} />}
         </Stack>
       )}
     </div>

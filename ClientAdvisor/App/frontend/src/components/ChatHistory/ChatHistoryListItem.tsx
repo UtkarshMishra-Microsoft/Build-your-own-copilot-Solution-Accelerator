@@ -32,7 +32,7 @@ interface ChatHistoryListItemCellProps {
 }
 
 interface ChatHistoryListItemGroupsProps {
-  groupedChatHistory: GroupedChatHistory[]
+  groupedChatHistory: GroupedChatHistory[],
 }
 
 const formatMonth = (month: string) => {
@@ -95,11 +95,11 @@ export const ChatHistoryListItemCell: React.FC<ChatHistoryListItemCellProps> = (
     }
   }, [appStateContext?.state.currentChat?.id, item?.id])
 
-  useEffect(()=>{
+  useEffect(() => {
     let v = appStateContext?.state.isRequestInitiated;
-    if(v!=undefined)
+    if (v != undefined)
       setIsButtonDisabled(v && isSelected)
-  },[appStateContext?.state.isRequestInitiated])
+  }, [appStateContext?.state.isRequestInitiated])
 
   const onDelete = async () => {
     appStateContext?.dispatch({ type: 'TOGGLE_LOADER' });
@@ -188,24 +188,20 @@ export const ChatHistoryListItemCell: React.FC<ChatHistoryListItemCellProps> = (
       key={item.id}
       tabIndex={0}
       aria-label="chat history item"
-      className={styles.itemCell}
+      className={`${styles.itemCell} ${isSelected ? styles.selectedItemCell : ""}`}
       onClick={() => handleSelectItem()}
       onKeyDown={e => (e.key === 'Enter' || e.key === ' ' ? handleSelectItem() : null)}
       verticalAlign="center"
       // horizontal
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      styles={{
-        root: {
-          backgroundColor: isSelected ? '#e6e6e6' : 'transparent'
-        }
-      }}>
+    >
       {edit ? (
         <>
           <Stack.Item style={{ width: '100%' }}>
             <form aria-label="edit title form" onSubmit={e => handleSaveEdit(e)} style={{ padding: '5px 0px' }}>
-              <Stack horizontal verticalAlign={'start'}>
-                <Stack.Item>
+              <Stack horizontal verticalAlign={'start'} style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Stack.Item style={{ flex: 1 }}>
                   <TextField
                     componentRef={textFieldRef}
                     autoFocus={textFieldFocused}
@@ -222,21 +218,23 @@ export const ChatHistoryListItemCell: React.FC<ChatHistoryListItemCellProps> = (
                     <Stack aria-label="action button group" horizontal verticalAlign={'center'}>
                       <IconButton
                         role="button"
+                        className={styles.itemButton}
                         disabled={errorRename !== undefined}
                         onKeyDown={e => (e.key === ' ' || e.key === 'Enter' ? handleSaveEdit(e) : null)}
                         onClick={e => handleSaveEdit(e)}
                         aria-label="confirm new title"
                         iconProps={{ iconName: 'CheckMark' }}
-                        styles={{ root: { color: 'green', marginLeft: '5px' } }}
+                        styles={{ root: { color: 'green' } }}
                       />
                       <IconButton
                         role="button"
+                        className={styles.itemButton}
                         disabled={errorRename !== undefined}
                         onKeyDown={e => (e.key === ' ' || e.key === 'Enter' ? cancelEditTitle() : null)}
                         onClick={() => cancelEditTitle()}
                         aria-label="cancel edit title"
                         iconProps={{ iconName: 'Cancel' }}
-                        styles={{ root: { color: 'red', marginLeft: '5px' } }}
+                        styles={{ root: { color: 'red' } }}
                       />
                     </Stack>
                   </Stack.Item>
@@ -255,28 +253,26 @@ export const ChatHistoryListItemCell: React.FC<ChatHistoryListItemCellProps> = (
         </>
       ) : (
         <>
-          <Stack horizontal verticalAlign={'center'} style={{ width: '100%' }}>
+          <Stack horizontal verticalAlign={'center'} style={{ width: '100%', justifyContent: 'space-between' }}>
             <div className={styles.chatTitle}>{truncatedTitle}</div>
-            {(isSelected || isHovered) && (
-              <Stack horizontal horizontalAlign="end">
-                <IconButton
-                  className={styles.itemButton}
-                  disabled={isButtonDisabled}
-                  iconProps={{ iconName: 'Delete' }}
-                  title="Delete"
-                  onClick={toggleDeleteDialog}
-                  onKeyDown={e => (e.key === ' ' ? toggleDeleteDialog() : null)}
-                />
-                <IconButton
-                  className={styles.itemButton}
-                  disabled={isButtonDisabled}
-                  iconProps={{ iconName: 'Edit' }}
-                  title="Edit"
-                  onClick={onEdit}
-                  onKeyDown={e => (e.key === ' ' ? onEdit() : null)}
-                />
-              </Stack>
-            )}
+            <Stack horizontal horizontalAlign="end">
+              <IconButton
+                className={styles.itemButton}
+                disabled={isButtonDisabled}
+                iconProps={{ iconName: 'Delete' }}
+                title="Delete"
+                onClick={toggleDeleteDialog}
+                onKeyDown={e => (e.key === ' ' ? toggleDeleteDialog() : null)}
+              />
+              <IconButton
+                className={styles.itemButton}
+                disabled={isButtonDisabled}
+                iconProps={{ iconName: 'Edit' }}
+                title="Edit"
+                onClick={onEdit}
+                onKeyDown={e => (e.key === ' ' ? onEdit() : null)}
+              />
+            </Stack>
           </Stack>
         </>
       )}
@@ -369,11 +365,11 @@ export const ChatHistoryListItemGroups: React.FC<ChatHistoryListItemGroupsProps>
             <Stack
               horizontalAlign="start"
               verticalAlign="center"
-              key={group.month}
+              key={group.title}
               className={styles.chatGroup}
-              aria-label={`chat history group: ${group.month}`}>
-              <Stack aria-label={group.month} className={styles.chatMonth}>
-                {formatMonth(group.month)}
+              aria-label={`chat history group: ${group.title}`}>
+              <Stack aria-label={group.title} className={styles.chatMonth}>
+                {group.title}
               </Stack>
               <List
                 aria-label={`chat history list`}
@@ -382,20 +378,11 @@ export const ChatHistoryListItemGroups: React.FC<ChatHistoryListItemGroupsProps>
                 className={styles.chatList}
               />
               <div ref={observerTarget} />
-              <Separator
-                styles={{
-                  root: {
-                    width: '100%',
-                    position: 'relative',
-                    '::before': {
-                      backgroundColor: '#d6d6d6'
-                    }
-                  }
-                }}
-              />
             </Stack>
           )
       )}
+
+
       {showSpinner && (
         <div className={styles.spinnerContainer}>
           <Spinner size={SpinnerSize.small} aria-label="loading more chat history" className={styles.spinner} />
