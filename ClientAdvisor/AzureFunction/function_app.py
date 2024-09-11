@@ -18,7 +18,8 @@ from semantic_kernel.functions.kernel_arguments import KernelArguments
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 from semantic_kernel.kernel import Kernel
 import pymssql
-
+from dotenv import load_dotenv
+load_dotenv()
 # Azure Function App
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -275,6 +276,10 @@ async def stream_openai_text(req: Request) -> StreamingResponse:
     settings.max_tokens = 800
     settings.temperature = 0
 
+    # Read the HTML file
+    with open("table.html", "r") as file:
+        html_content = file.read() 
+
     system_message = '''you are a helpful assistant to a wealth advisor. 
     Do not answer any questions not related to wealth advisors queries.
     If asked, provide information about client meetings according to the requested timeframe: give details about upcoming meetings if asked for "next" or "upcoming" meetings, and provide details about past meetings if asked for "previous" or "last" meetings including the scheduled time.
@@ -296,9 +301,10 @@ async def stream_openai_text(req: Request) -> StreamingResponse:
     Always consider to give selected client full name only in response and do not use other example names also consider my client means currently selected client.
     If you cannot answer the question, always return - I cannot answer this question from the data available. Please rephrase or add more details.
     ** Remove any client identifiers or ids or numbers or ClientId in the final response.
-
+    For any questions requiring a table, always render the table using the following HTML format:
     '''
-
+    system_message += html_content
+   
     user_query = query.replace('?',' ')
 
     user_query_prompt = f'''{user_query}. Always send clientId as {user_query.split(':::')[-1]} '''
